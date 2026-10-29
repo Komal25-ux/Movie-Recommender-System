@@ -1,10 +1,11 @@
-import streamlit as st
-import pickle
-import requests
+import html
+import os
+from pathlib import Path
 
-import sklearn
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+import streamlit as st
+
+from recommender import build_similarity, display_titles, poster_url, recommend
 
 # ==================== Page Config ==================== #
 st.set_page_config(page_title="Cinematica | AI Recommender", page_icon="🍿", layout="wide", initial_sidebar_state="collapsed")
@@ -253,47 +254,31 @@ div[data-baseweb="select"] > div:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== Functions ==================== #
-def fetch_poster(movie_id):
-    url = "https://api.themoviedb.org/3/movie/{}?api_key=078f6f4300295e24391e10cf756c47af&language=en-US".format(movie_id)
-    try:
-        data = requests.get(url).json()
-        poster_path = data['poster_path']
-        full_path = "https://image.tmdb.org/t/p/w500" + poster_path
-        return full_path
-    except:
-        return "https://via.placeholder.com/500x750/000000/FFFFFF?text=Poster+Unavailable"
-
-def recommend(movie):
-    index = movies[movies['title'] == movie].index[0]
-    distances = sorted(list(enumerate(similarity[index])), reverse=True, key=lambda x: x[1])
-    recommended_movie_names = []
-    recommended_movie_posters = []
-    
-    # Check if we have 5 movies, otherwise adjust the limit
-    range_limit = min(6, len(distances))
-    
-    for i in distances[1:range_limit]:
-        movie_id = movies.iloc[i[0]].movie_id
-        recommended_movie_posters.append(fetch_poster(movie_id))
-        recommended_movie_names.append(movies.iloc[i[0]].title)
-    return recommended_movie_names, recommended_movie_posters
-
-# ==================== Load Data ==================== #
+# ==================== Data ==================== #
 @st.cache_data
-def load_data():
-    movies = pickle.load(open('movie_list.pkl','rb'))
-    
-    # Rather than shipping a 180MB file to the cloud, we calculate the similarity 
-    # vector geometry on the fly once when the server boots!
-    cv = CountVectorizer(max_features=5000, stop_words='english')
-    vector = cv.fit_transform(movies['tags']).toarray()
-    similarity = cosine_similarity(vector)
-    
-    return movies, similarity
+def load_catalogue():
+    # The similarity matrix is computed once when the server starts, rather
+    # than shipping a ~180 MB file (see build_model.py for the catalogue).
+    movies = pd.read_csv(Path(__file__).with_name("movie_list.csv"), dtype={"year": "Int64"})
+    return movies, build_similarity(movies["tags"])
 
-movies, similarity = load_data()
-movies_list = movies['title'].values
+
+def tmdb_api_key():
+    """From Streamlit secrets in the cloud, or the environment locally.
+    Never in the source code: a key committed to a public repo is public."""
+    try:
+        return st.secrets["TMDB_API_KEY"]
+    except (FileNotFoundError, KeyError):
+        return os.environ.get("TMDB_API_KEY", "")
+
+
+@st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
+def cached_poster(movie_id):
+    return poster_url(movie_id, tmdb_api_key())
+
+
+movies, similarity = load_catalogue()
+labels = display_titles(movies)
 
 # ==================== App Layout ==================== #
 # Headline Brand
@@ -311,9 +296,12 @@ with col_content:
     inner_c1, inner_c2 = st.columns([4, 1.8]) # Increased right ratio for the button
     
     with inner_c1:
-        selected_movie = st.selectbox(
+        # Options are row positions, shown as titles: the app works with the
+        # row it was given and never has to look a title back up.
+        selected = st.selectbox(
             "Hidden_Label",
-            movies_list,
+            range(len(movies)),
+            format_func=labels.__getitem__,
             help="Type to search or select a film from the dropdown.",
             label_visibility="collapsed" # Hides label, keeping field flush with the button
         )
@@ -324,21 +312,26 @@ with col_content:
     # and forces it to display directly underneath the search bar.
     if submit_btn:
         with st.spinner("Analyzing parameters and gathering posters..."):
-            recommended_movie_names, recommended_movie_posters = recommend(selected_movie)
+            picks = recommend(similarity, selected)
+            recommendations = [(labels[i], cached_poster(movies.at[i, "movie_id"])) for i in picks]
 
 # ==================== Recommend Action ==================== #
 if submit_btn:
     st.markdown("<div class='separator'></div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='results-header'>Matches based on <span>{selected_movie}</span></div>", unsafe_allow_html=True)
-    
+    st.markdown(f"<div class='results-header'>Matches based on <span>{html.escape(labels[selected])}</span></div>", unsafe_allow_html=True)
+
+    if not recommendations:
+        st.markdown("<div class='results-header'>No close matches found for this film.</div>", unsafe_allow_html=True)
+
     # We output pure HTML to completely bypass Streamlit UI limitations
     # IMPORTANT: Kept in a single line without newlines to prevent Streamlit from parsing inner text as Markdown
     cards_html = ""
-    for name, poster in zip(recommended_movie_names, recommended_movie_posters):
-        # Escape any potential double quotes in the movie name to avoid HTML parsing errors
-        safe_name = str(name).replace('"', '&quot;')
-        cards_html += f'<div class="movie-card"><img src="{poster}" alt="{safe_name}"><div class="movie-info"><h3 class="movie-title">{safe_name}</h3><p class="movie-subtitle">Recommended Match</p></div></div>'
-        
+    for name, poster in recommendations:
+        # Titles and URLs are escaped before they go into HTML: a title with
+        # quotes, "<" or "&" must not break (or inject into) the page.
+        safe_name = html.escape(str(name))
+        cards_html += f'<div class="movie-card"><img src="{html.escape(poster)}" alt="{safe_name}"><div class="movie-info"><h3 class="movie-title">{safe_name}</h3><p class="movie-subtitle">Recommended Match</p></div></div>'
+
     final_output = f'<div class="movie-grid">{cards_html}</div>'
     st.markdown(final_output, unsafe_allow_html=True)
 

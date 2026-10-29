@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Scikit-Learn](https://img.shields.io/badge/scikit--learn-%23F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
 
-**[🔥 View Live Application on Streamlit Cloud](https://your-app-name.streamlit.app/)**
+**[🔥 View Live Application on Streamlit Cloud](https://movie-recommender-system-komal25.streamlit.app/)**
 
 Welcome to **Cinematica**, a highly intelligent, content-based Movie Recommendation Engine built organically with Machine Learning and Natural Language Processing. It leverages mathematical cosine similarity algorithms to deduce relationship proximity between thousands of cinematic configurations, wrapped dynamically inside a premium, Netflix-inspired dark-mode interface.
 
@@ -14,10 +14,10 @@ Developed by **Komal Mittal**.
 
 ## 🏗️ Step-by-Step Data Engineering Pipeline
 
-The entire machine learning model is structurally documented and compiled inside `notebook.ipynb`. Here is an in-depth breakdown of the exact sequential step-by-step logic executed to train this AI engine:
+The pipeline was explored in `notebook.ipynb` and now lives, as tested functions, in `recommender.py`; `python build_model.py` rebuilds the catalogue (`movie_list.csv`) from the two TMDB CSVs. Here is the step-by-step logic:
 
 ### Step 1: Data Aggregation & Merging
-We began by importing the `tmdb_5000_movies` and `tmdb_5000_credits` CSV datasets natively via Pandas. Since cast and crew details are intrinsically separated from general movie properties, we mathematically **Merged** the two datasets directly using the `title` variable as the explicit primary joining key.
+We began by importing the `tmdb_5000_movies` and `tmdb_5000_credits` CSV datasets via Pandas. Since cast and crew details are separated from general movie properties, we **merged** the two datasets on the **movie id**. (Merging on the title, as the notebook first did, pairs the wrong cast with films that share a title, such as the two *Batman*s.)
 
 ### Step 2: Dimensionality Reduction (Feature Selection)
 The native dataset contains over 20+ columns of metadata (e.g., Budget, Homepage, Spoken Languages). These introduce massive statistical noise. We stripped the structural matrix down to exclusively keep the 7 most mathematically relevant NLP features:
@@ -34,13 +34,13 @@ The textual attributes natively arrived as stringified JSON dictionaries. We uti
 ### Step 4: The "Tag" Generation
 We mathematically concatenated every single text-based value (`overview` list + `genres` + `keywords` + `cast` + `crew`) dynamically into one massive sequential string for every movie. This unified meta-string is explicitly defined as the **`tags`** string.
 
-### Step 5: Natural Language Processing (Stemming)
-Before vectorization, we applied **Porter Stemming** (via the `nltk` library). This mathematically collapses varying grammatical iterations of identical root strings natively into the exact same token (e.g., converting "acted", "acting", "actor" fundamentally all into "act"), massively optimizing algorithmic efficiency.
+### Step 5: No stemming (yet)
+Words are used as they appear: no stemming is applied, so "acted" and "acting" count as different words. Adding Porter stemming (via `nltk`) is a possible improvement.
 
 ### Step 6: Text Vectorization & Mathematics (Bag of Words)
 We executed the `CountVectorizer(max_features=5000, stop_words='english')` mathematical framework.
 *   **Stop Words Removal**: Automatically destroyed irrelevant filler text (e.g., 'and', 'the', 'is').
-*   **Vectorization**: Extracted the exact Top 5,000 most frequently appearing mathematical words across all `tags` strings natively mapped in the dataset. Each movie is then geometrically converted explicitly into a highly dimensional 5000x5000 coordinate vector.
+*   **Vectorization**: Extracted the exact Top 5,000 most frequently appearing mathematical words across all `tags` strings natively mapped in the dataset. Each movie becomes a 5,000-dimensional word-count vector, so the catalogue is a 4,803 × 5,000 matrix.
 
 ### Step 7: Cosine Similarity Calculation
 Rather than relying on basic numerical distance, the engine explicitly utilized **`cosine_similarity`** comparing mathematical vector angles. A similarity score approaching `1.0` strictly means the movies are effectively completely parallel coordinates natively mirroring identical contexts!
@@ -59,8 +59,8 @@ Rather than relying on basic numerical distance, the engine explicitly utilized 
 
 ### 1. Clone the repository essentially
 ```bash
-git clone https://github.com/your-username/movie-recommender-system.git
-cd movie-recommender-system
+git clone https://github.com/Komal25-ux/Movie-Recommender-System.git
+cd Movie-Recommender-System
 ```
 
 ### 2. Install explicitly required dependencies
@@ -70,11 +70,18 @@ pip install -r requirements.txt
 ```
 
 ### 3. Launching Locally natively
-Ensure your `.pkl` and explicit `app.py` parameters are structurally seated, then execute:
+Posters come from TMDB: set your own key first (`export TMDB_API_KEY=...`, or `TMDB_API_KEY` in Streamlit secrets on the cloud). Without one, the app still works and shows placeholder posters. Then run:
 ```bash
 python3 -m streamlit run app.py
 ```
 Open exactly `http://localhost:8501` securely in your browser cleanly mapping the cinematic AI!
+
+### 4. Running the tests
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+107 tests cover the data pipeline, the similarity maths, recommending, posters, the shipped catalogue, recommendation quality and the Streamlit page itself. See **[TESTING.md](TESTING.md)**.
 
 ---
 

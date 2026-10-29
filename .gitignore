@@ -24,3 +24,7 @@ Thumbs.db
 .vscode/
 mutants/
 .hypothesis/
+
+# Streamlit secrets and local configs
+.streamlit/
+
